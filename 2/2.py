@@ -14,52 +14,119 @@ def better_argmax(arr):
     max_index = np.random.randint(low=0,high=len(best_indices_arr))
     return best_indices_arr[max_index]
 
-def k_armed_bandit(k):
-    bandit_list = []
-    for bandit in range(k):
-        q_star = np.random.normal(loc=0,scale=1)
-        bandit_list.append(q_star)
-    return bandit_list
+class StationaryKArmedBandit:
+    def __init__(self, k):
+        self.bandit_list = [np.random.normal(loc=0,scale=1) for _ in range(k)] # initialize equal starting point
 
-def epsilon_greedy_run(k, bandit_list, T, epsilon):
-    derived_q_a_lst = [[q_a,0] for q_a in range(k)] # estimated value, n(a) the number of times an action has been chosen over a run
-    reward_lst = [] # reward over time
-    for t in range(1,T+1):
-        epsilon_rv = np.random.uniform(low=0,high=1)
-        best_move = better_argmax(derived_q_a_lst)
-        if epsilon_rv > epsilon:
-            action = best_move
-        elif epsilon_rv < epsilon:
-            action = np.random.randint(low=0,high=k)
+    def interact(self, action): # return reward taken by specific action
+        q_star_a = self.bandit_list[action]
+        return np.random.normal(loc=q_star_a, scale=1)
 
-        reward = np.random.normal(loc=bandit_list[action],scale=1)
+class NonStationaryKArmedBandit:
+    def __init__(self, k):
+        self.bandit_list = [0 for _ in range(k)] # initialize equal starting point
 
-        derived_q_a_lst[action][1] += 1
-        derived_q_a_lst[action][0] += (reward - derived_q_a_lst[action][0])/derived_q_a_lst[action][1]
+    def time_step(self):
+        for action in range(k):
+            self.bandit_list[action] += np.random.normal(loc=0,scale=0.001)
 
-        reward_lst.append(reward)
+    def interact(self, action): # return reward taken by specific action
+        q_star_a = self.bandit_list[action]
+        return np.random.normal(loc=q_star_a, scale=1)
 
-    return reward_lst
+class SampleAverageAgent:
+    def __init__(self, k, epsilon):
+        self.n = 0 # time agent experiences
+        self.k = k
+        self.epsilon = epsilon
+        self.Q_list = [0 for _ in range(k)]
 
-K = 10
-bandit_list = k_armed_bandit(K)
+    def update(self, action, reward):
+        self.n += 1 
+        Q_n = self.q_list[action] 
+        self.q_list[action] += Q_n + (reward - Q_n)/self.n
 
-trials = 2000
-time_window = 500
-for epsilon in [0,0.01,0.1]:
-    average_reward_over_trials = [0 for _ in range(time_window)]
-    for trial in range(1,trials+1):
-        results = epsilon_greedy_run(k=K, bandit_list=bandit_list, T=time_window, epsilon=epsilon)
-        # running_average = [sum(results[1][:window])/window for window in range(1,len(results[1])+1)]
+    def choose(self):
+        greedy_action = better_argmax(self.Q_list)
+        if np.random.uniform(0,1) < self.epsilon:
+            random_action = greedy_action
+            while random_action == greedy_action:
+                random_action = random.randint(low=0,high=k+1)
+            return random_action
+        else:
+            return greedy_action
 
-        for index, reward_val in enumerate(results):
-            average_reward_over_trials[index] += reward_val
+class IncrementalComputeAgent:
+    def __init__(self, k, epsilon, alpha):
+        self.n = 0 # time agent experiences
+        self.alpha = alpha
+        self.Q_list = [0 for _ in range(k)]
 
-        # plt.scatter(results[0], results[1])
-    plt.scatter([t for t in range(1, time_window+1)], [val/trials for val in average_reward_over_trials])
-        
+    def update(self, action, reward):
+        self.n += 1 
+        Q_n = self.q_list[action] 
+        self.q_list[action] += Q_n + (reward - Q_n)*(self.alpha)
 
-plt.xlabel('Time Step')
-plt.ylabel('Running Average of Reward over time')
-plt.ylim(0,2.5)
-plt.show()
+    def choose(self):
+        greedy_action = better_argmax(self.Q_list)
+        if np.random.uniform(0,1) < self.epsilon:
+            random_action = greedy_action
+            while random_action == greedy_action:
+                random_action = random.randint(low=0,high=k+1)
+            return random_action
+        else:
+            return greedy_action
+
+def excersize_2dot5_experiment(global_k, global_epsilon, global_alpha):
+    trials = 2000
+    time_window = 10000
+    # global monitoring structs
+    global_optimal_action_list_agent1 = []
+    global_reward_lst_agent1 = []
+    global_optimal_action_list_agent2 = []
+    global_reward_lst_agent2 = []
+    for trial in range(trials):
+        bandit = NonStationaryKArmedBandit(k=global_k)
+        agent_1 = SampleAverageAgent(k=global_k, epsilon=global_epsilon)
+        agent_2 = IncrementalComputeAgent(k=global_k, epsilon=global_epsilon, alpha=global_alpha)
+        # trial monitoring structs
+        trial_optimal_action_lst_agent_1 = [] # True at index t if optimal action was chosen at time t, False otherwise
+        trial_reward_lst_agent_1 = [] # record of reward received at time t
+        trial_optimal_action_lst_agent_2 = [] # True at index t if optimal action was chosen at time t, False otherwise
+        trial_reward_lst_agent_2 = [] # record of reward received at time t
+        for global_time_step in range(time_winow):
+            # agents choose actions
+            agent_1_action = agent_1.choose()
+            agent_2_action = agent_2.choose()
+            # monitor chosen action
+            trial_optimal_action.append(agent_1_action == better_argmax(bandit.bandit_list))
+            trial_optimal_action.append(agent_2_action == better_argmax(bandit.bandit_list))
+
+            # agents receives reward
+            agent_1_reward = bandit.interact(agent_1_action)
+            agent_2_reward = bandit.interact(agent_2_action)
+            # monitor received reward
+            trial_reward_lst.append(reward)
+
+            # agent updates its internal understanding of environment
+            agent_1.update(action=agent_1_action, reward=reward)
+
+            # environment updates it's own state
+            bandit.time_step()
+
+        # update global monitoring lists
+
+    # plot final global monitoring structs
+    plt.scatter([t for t in range(time_window)], [val/trials for val in global_optimal_action_list_agent1])
+    plt.scatter([t for t in range(time_window)], [val/trials for val in global_optimal_action_list_agent2])
+    # plt.scatter([t for t in range(time_window)], [val/trials for val in global_reward_lst_agent1])
+    # plt.scatter([t for t in range(time_window)], [val/trials for val in global_reward_lst_agent2])
+    plt.xlabel('Time Step')
+    plt.ylabel('Percent Optimal Action')
+    # plt.ylabel('Running Average of Reward over time')
+    plt.ylim(0,1)
+    plt.show()
+
+
+
+excersize_2dot5_experiment(global_k=10, global_epsilon=0.1, global_alpha=0.1)
