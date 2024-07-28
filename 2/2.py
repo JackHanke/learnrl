@@ -127,6 +127,4 @@ def excersize_2dot5_experiment(global_k, global_epsilon, global_alpha):
     plt.ylim(0,1)
     plt.show()
 
-
-
 excersize_2dot5_experiment(global_k=10, global_epsilon=0.1, global_alpha=0.1)
